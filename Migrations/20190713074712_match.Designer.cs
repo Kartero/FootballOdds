@@ -4,14 +4,16 @@ using FootballOdds.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace FootballOdds.Migrations
 {
     [DbContext(typeof(FootballOddsContext))]
-    partial class FootballOddsContextModelSnapshot : ModelSnapshot
+    [Migration("20190713074712_match")]
+    partial class match
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

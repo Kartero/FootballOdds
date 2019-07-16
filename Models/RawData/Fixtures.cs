@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using FootballOdds.Models.ResourceModels;
+using System.Data.SqlClient;
 
 namespace FootballOdds.Models.RawData
 {
@@ -14,6 +15,7 @@ namespace FootballOdds.Models.RawData
     {
         public const string sourcePath = "source";
         public readonly string[] teamTitles = { "HomeTeam", "AwayTeam" };
+        public readonly string[] matchTitles = { "Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR" };
 
         private readonly IHostingEnvironment _env;
 
@@ -23,12 +25,15 @@ namespace FootballOdds.Models.RawData
 
         private List<string> teams;
 
+        private List<Dictionary<string, string>> matches;
+
         public Fixtures(IHostingEnvironment env, FootballOddsContext context)
         {
             _env = env;
             _context = context;
             csvReader = new CsvReader(_env);
             teams = new List<string>();
+            matches = new List<Dictionary<string, string>>();
         }
 
         public string[] ReadAll()
@@ -61,7 +66,8 @@ namespace FootballOdds.Models.RawData
             int count = 0;
             var titles = GetTitles(data);
             var teamIndexes = TeamIndexes(titles);
-            
+            var matchIndexes = GetMatchTitleIndexes(titles);
+
             foreach (var row in data)
             {
                 if (count > 0)
@@ -72,7 +78,15 @@ namespace FootballOdds.Models.RawData
                 count++;
             }
 
-            AddTeams();
+            var mappedTeams = AddTeams();
+            
+            foreach (var row in data)
+            {
+                if (count > 0)
+                {
+                    GetMatchesFromRow(row, matchIndexes, mappedTeams);
+                }
+            }
         }
 
         private int[] TeamIndexes(string[] titles)
@@ -102,10 +116,14 @@ namespace FootballOdds.Models.RawData
             {
                 Console.WriteLine("Something wrong with a row or team indexes. " + e.Message);
             }
+            catch (SqlException e)
+            {
+                Console.WriteLine("Sql exception. " + e.Message);
+            }
             
         }
 
-        private bool AddTeams()
+        private Dictionary<string, int> AddTeams()
         {
             var existingTeams = _context.Team
                 .Select(team => team.Name)
@@ -124,10 +142,53 @@ namespace FootballOdds.Models.RawData
                 }
                 _context.SaveChanges();
 
-                return true;
             }
 
-            return false;
+            var mappedTeams = _context.Team
+                .Select(team => new { team.Id, team.Name })
+                .ToDictionary(team => team.Name, team => team.Id);
+            return mappedTeams;
+        }
+
+        private void GetMatchesFromRow(string[] row, Dictionary<int, string> matchTitleIndexes, Dictionary<string, int> mappedTeams)
+        {
+            var count = row.Count();
+            var match = new Dictionary<string, string>();
+            for (var i = 0; i < count; i++)
+            {
+                if (matchTitleIndexes.ContainsKey(i))
+                {
+                    var column = row[i];
+                    var columnTitle = matchTitleIndexes[i];
+
+                    if (teamTitles.Contains(columnTitle))
+                    {
+                        column = mappedTeams[column].ToString();
+                    }
+
+                    match.Add(columnTitle, column);
+                }
+            }
+            matches.Add(match);
+        }
+
+        private Dictionary<int, string> GetMatchTitleIndexes(string[] titles)
+        {
+            var indexes = new Dictionary<int, string>();
+            foreach (var title in matchTitles)
+            {
+                try
+                {
+                    var index = Array.IndexOf(titles, title);
+                    indexes.Add(index, title);
+                }
+                catch (IndexOutOfRangeException e)
+                {
+                    Console.WriteLine("Indexes wont match. " + e.Message);
+                }
+            }
+
+            return indexes;
         }
     }
 }
